@@ -1,0 +1,365 @@
+import streamlit as st
+import streamlit.components.v1 as components
+import plotly.graph_objects as go
+import pandas as pd
+from rightside import render_right_sidebar
+from chat import render_chat_interface
+from db import init_table
+import plotly.express as px
+from table import load_dashboard_data
+import streamlit.components.v1 as components
+import base64
+from car_service import CarService
+
+# Page configuration
+st.set_page_config(
+    page_title="서울에 ~한 충전소, 일차로",
+    page_icon="docs/favicon_io/favicon.ico",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+init_table()
+
+load_dashboard_data()
+
+# 배경 이미지 base64 변환
+def get_base64(file_path):
+    with open(file_path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+bg_img = get_base64("docs/background1.jpg")
+
+# 배경 적용
+st.markdown(
+    f"""
+    <style>
+    .stApp {{
+        background-image: url("data:image/jpg;base64,{bg_img}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }}
+
+    .main .block-container {{
+        background-color: rgba(0,0,0,0.55);
+        border-radius: 16px;
+        padding: 2rem;
+    }}
+
+    h1,h2,h3,h4,h5,h6,p,div,span,label {{
+        color: white !important;
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Custom CSS for styling
+st.markdown("""
+<style>
+    /* Main container */
+    .main-container {
+        display: flex;
+        height: 100vh;
+        position: relative;
+    }
+    
+    /* Left sidebar */
+    .left-sidebar {
+        width: 300px;
+        background: var(--bg-secondary);
+        padding: 20px;
+        border-right: 1px solid var(--border-color);
+        transition: width 0.3s ease;
+    }
+    
+    .left-sidebar.collapsed {
+        width: 60px;
+    }
+    
+    /* Right sidebar */
+    .right-sidebar {
+        width: 300px;
+        background: var(--bg-secondary);
+        padding: 20px;
+        border-left: 1px solid var(--border-color);
+        transition: width 0.3s ease;
+    }
+    
+    .right-sidebar.collapsed {
+        width: 60px;
+    }
+    
+    /* Logo area */
+    .logo-area {
+        text-align: center;
+        padding: 12px 0;
+        font-size: 22px;
+        font-weight: bold;
+        color: #1e88e5;
+        border-bottom: 2px solid #1e88e5;
+        margin-bottom: 12px;
+    }
+    
+    /* Chat button */
+    .chat-button {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: #1e88e5;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 24px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        z-index: 1000;
+        transition: transform 0.2s;
+    }
+    
+    .chat-button:hover {
+        transform: scale(1.1);
+    }
+    
+    /* Chat container */
+    .chat-container {
+        position: fixed;
+        bottom: 90px;
+        right: 20px;
+        width: 350px;
+        height: 500px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        z-index: 999;
+        display: none;
+        flex-direction: column;
+    }
+    
+    .chat-container.open {
+        display: flex;
+    }
+    
+    .chat-container.fullscreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+    }
+    
+    /* Chat header */
+    .chat-header {
+        padding: 15px;
+        background: #1e88e5;
+        color: white;
+        border-radius: 10px 10px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .chat-container.fullscreen .chat-header {
+        border-radius: 0;
+    }
+    
+    /* Chat messages */
+    .chat-messages {
+        flex: 1;
+        padding: 15px;
+        overflow-y: auto;
+    }
+    
+    /* Chat input */
+    .chat-input {
+        padding: 15px;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    /* Map placeholder */
+    .map-placeholder {
+        height: 100%;
+        background: var(--bg-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        font-size: 18px;
+    }
+   
+</style>
+""", unsafe_allow_html=True)
+
+
+st.markdown("""
+<style>
+
+/* 상단 헤더 제거 */
+header {
+    visibility: hidden;
+}
+
+/* footer 제거 */
+footer {
+    visibility: hidden;
+}
+
+/* Deploy 버튼/상단 메뉴 제거 */
+#MainMenu {
+    visibility: hidden;
+}
+
+/* 위쪽 padding 제거 */
+.block-container {
+    padding-top: 1rem;
+    padding-bottom: 0rem;
+}
+
+/* 전체 높이 최적화 */
+.main .block-container {
+    max-width: 100%;
+    padding-top: 0.5rem;
+}
+
+/* 불필요한 여백 제거 */
+div[data-testid="stVerticalBlock"] {
+    gap: 0.5rem;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# Initialize session state for UI controls
+if 'left_sidebar_open' not in st.session_state:
+    st.session_state.left_sidebar_open = True
+if 'right_sidebar_open' not in st.session_state:
+    st.session_state.right_sidebar_open = True
+if 'search_section_open' not in st.session_state:
+    st.session_state.search_section_open = True
+if 'search_query' not in st.session_state:
+    st.session_state.search_query = ''
+if 'search_results' not in st.session_state:
+    st.session_state.search_results = []
+if 'chat_open' not in st.session_state:
+    st.session_state.chat_open = False
+if 'chat_fullscreen' not in st.session_state:
+    st.session_state.chat_fullscreen = False
+if 'chat_messages' not in st.session_state:
+    st.session_state.chat_messages = []
+if "car_service" not in st.session_state:
+    st.session_state.car_service = CarService()
+
+car_service = st.session_state.car_service
+# 그래프를 그리기 위해 가장 먼저 DB에서 데이터를 로드합니다.
+try:
+    df = load_dashboard_data()
+except Exception as e:
+    st.error(f"데이터베이스 연결 및 로드 실패: {e}")
+    st.stop()
+
+# Main layout - responsive based on right sidebar state
+if st.session_state.right_sidebar_open:
+    col1, col2 = st.columns([2, 2], gap="large")
+else:
+    col1, col2 = st.columns([1, 0.01])
+
+
+# Main Content (Dashboard)
+with col1:
+    
+    st.markdown('<div class="logo-area">서울에 ~한 충전소, 일차로</div>', unsafe_allow_html=True)
+    st.markdown("---")
+# Loading layout
+with st.spinner('로딩 중...'):
+    # Main Content (Dashboard)
+    with col1:
+        st.markdown("<div style='padding-top:20px;'></div>", unsafe_allow_html=True)
+        st.image("docs/logo.png", width=400)
+    
+        # st.markdown("---")
+    
+        # Dashboard graphs
+        
+        # Sample data for graphs
+        months = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월']
+        values_last_year = [110, 140, 170, 200, 190, 230, 260]
+        values_this_year = [120, 150, 180, 220, 200, 250, 280]
+
+        districts = [
+            '종로구', '중구', '용산구', '성동구', '광진구', '동대문구', '중랑구', '성북구',
+            '강북구', '도봉구', '노원구', '은평구', '서대문구', '마포구', '양천구', '강서구',
+            '구로구', '금천구', '영등포구', '동작구', '관악구', '서초구', '강남구', '송파구', '강동구'
+        ]
+        stations = [
+            12, 14, 18, 21, 19, 17, 13, 16,
+            11, 10, 22, 20, 18, 23, 24, 27,
+            15, 9, 26, 14, 13, 25, 30, 28, 17
+        ]
+        build_status_df = pd.DataFrame({
+            '자치구': districts,
+            '충전소 수': stations
+        })
+
+        col_left, col_right = st.columns([2, 1])
+        with col_left:
+            st.markdown('<div style="font-size:1.2rem; font-weight:700; margin-top:0.5rem; margin-bottom:0.4rem;">충전소 구축 현황(구 단위)</div>', unsafe_allow_html=True)
+            station_list = car_service.selectConstituencyGroupList()
+            st.dataframe(station_list, height=220)
+
+        with col_right:
+            st.markdown('<div style="font-size:1.2rem; font-weight:700; margin-top:0.5rem; margin-bottom:0.4rem;">차량 유형 비율</div>', unsafe_allow_html=True)
+            fig3 = go.Figure()
+            car_list = car_service.selectCarCategoryList()
+            fig3.add_trace(go.Pie(labels=['내연기관', '전기차'],
+                                values=[car_list[0]['gasCarPct'], car_list[0]['elecCarPct']], hole=0.3))
+            
+            fig3.update_layout(title='차량 유형 비율', height=240, margin=dict(t=35, b=10))
+            
+            st.plotly_chart(fig3, width='stretch', key="vehicle_type_pie")
+
+        # Combined bar chart for last year and this year
+        carDict = car_service.selectCarYOYList()
+        fig1 = go.Figure()
+        fig1.add_trace(go.Bar(x=months, y=carDict['table2'], name='전년도', marker_color='lightgray', orientation='v'))
+        fig1.add_trace(go.Bar(x=months, y=carDict['table1'], name='이번 년도', marker_color='royalblue', orientation='v'))
+        
+        fig1.update_layout(
+            title='서울시 전기차 전년대비 금년 등록대수',
+            barmode='group',
+            height=150,
+            margin=dict(t=36, b=20, l=40, r=20),
+            yaxis_title='등\n록\n대\n수',
+            yaxis_title_standoff=20,
+            xaxis_title='월',
+            legend_title='연도'
+        )
+
+        st.plotly_chart(fig1, width='stretch')
+        # st.markdown("<div style='height:80px'></div>", unsafe_allow_html=True)
+
+        # *3번 테이블 ===============================================
+        # st.markdown("<div style='height:80px'></div>", unsafe_allow_html=True)
+
+        # *4. 챗봇 추가
+        # st.markdown("---")
+        render_chat_interface()
+
+    # Right Sidebar
+    with col2:
+        render_right_sidebar()
+
+
+# Chat Interface (Floating)
+# render_chat_interface()
+
+# Footer
+st.markdown("---")
+st.markdown("<div style='text-align:center;color:#6c757d;'>© 2024 Map Application</div>", unsafe_allow_html=True)
